@@ -51,14 +51,15 @@ function M.PrecomputeKernel1D (out, n, kernel, kn)
 	out.n = kn
 end
 
---[[
+--- DOCMEMORE
 -- Precomputed kernel method
-function AuxMethod1D.precomputed_kernel (n, signal, sn, kernel)
-	fft_utils.PrepareRealFFT_1D(B, n, signal, sn)
-	real_fft.RealFFT_1D(B, n)
-	fft_utils.Multiply_1D(B, kernel, n)
+function M.MakePrecomputedKernelFunc1D (out)
+	return function(n, signal, sn, kernel)
+		fft_utils.PrepareRealFFT_1D(out, n, signal, sn)
+		real_fft.RealFFT_1D(out, n)
+		fft_utils.Multiply_1D(out, kernel, n)
+	end
 end
-]]
 
 -- Export the module.
 return M

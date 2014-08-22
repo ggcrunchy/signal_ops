@@ -25,7 +25,7 @@
 -- INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
 -- CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
 -- ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
---POSSIBILITY OF SUCH DAMAGE.
+-- POSSIBILITY OF SUCH DAMAGE.
 
 --
 -- Permission is hereby granted, free of charge, to any person obtaining
@@ -51,29 +51,29 @@
 --
 
 -- Standard library imports --
+local ceil = math.ceil
+local huge = math.huge
 local min = math.min
 
 -- Modules --
-local fft_utils = require("dft_ops.utils")
 local real_fft = require("dft_ops.real_fft")
+local signal_utils = require("signal_ops.utils")
 
 -- Exports --
 local M = {}
 
--- Common 1D precomputations
-local function AuxPrecomputeKernel1D (out, n, kernel, kn)
-	fft_utils.PrepareRealFFT_1D(out, n, kernel, kn)
-	real_fft.RealFFT_1D(out, n)
+-- Scratch buffers used to perform transforms --
+local B, C = {}, {}
 
-	out.n = kn
-end
+--
+local PrecomputedKernelFunc = signal_utils.MakePrecomputedKernelFunc1D(B)
 
 -- Computes a reasonable block length and pretransforms the kernel
 local function TransformKernel1D (kernel, kn)
 	local overlap = kn - 1
-	local _, n = LenPower(4 * overlap, kn)
+	local _, n = signal_utils.LenPower(4 * overlap, kn)
 
-	AuxPrecomputeKernel1D(C, n, kernel, kn)
+	signal_utils.PrecomputeKernel1D(C, n, kernel, kn)
 
 	return overlap, n, .5 * n
 end
@@ -107,7 +107,7 @@ function M.OverlapAdd_1D (signal, kernel, opts)
 	end
 
 	-- Read in and process each block.
-	local blockn, pk = n - overlap, AuxMethod1D.precomputed_kernel
+	local blockn = n - overlap
 
 	for pos = 1, sn, blockn do
 		-- Read in the next part of the signal.
@@ -118,7 +118,7 @@ function M.OverlapAdd_1D (signal, kernel, opts)
 		end
 
 		-- Multiply the (complex) results...
-		pk(n, B, count, C, kn)
+		PrecomputedKernelFunc(n, B, count, C, kn)
 
 		-- ...transform back to the time domain...
 		real_fft.RealIFFT_1D(B, halfn)
@@ -232,7 +232,7 @@ function M.OverlapSave_1D (signal, kernel, opts)
 	end
 
 	-- Read in each block, stepping slightly fewer than N samples to account for overlap.
-	local csignal, pk = opts and opts.into or {}, AuxMethod1D.precomputed_kernel
+	local csignal = opts and opts.into or {}
 	local nconv, step = sn + kn - 1, n - overlap
 
 	for pos = 1, nconv, step do
@@ -258,7 +258,7 @@ function M.OverlapSave_1D (signal, kernel, opts)
 		-- ^^^ TODO: Could it possibly spill over into one more (degenerate?) block?
 
 		-- Multiply the (complex) results...
-		pk(n, B, count, C, kn)
+		PrecomputedKernelFunc(n, B, count, C, kn)
 
 		-- ...transform back to the time domain...
 		real_fft.RealIFFT_1D(B, halfn)
@@ -272,6 +272,165 @@ function M.OverlapSave_1D (signal, kernel, opts)
 	end
 
 	return csignal
+end
+
+-- --
+local Flops = {
+	{ 14, 58,172, 440, 1038, 2358, 5264, 11644, 25594, 55946, 121644, 263136, 566438 },
+	{ 58, 178, 470, 1134, 2586, 5738, 12574, 27382, 59378, 128274, 276054, 591806, 1263946 },
+	{ 172, 470, 1170, 2730, 6098, 13330, 28858, 62186, 133602, 286242, 611498, 1302394, 2765458 },
+	{ 440, 1134, 2730, 6242, 13762, 29794, 63986, 136914, 292290, 622658, 1323346, 2805490, 5932322 },
+	{ 1038, 2586, 6098, 13762, 30082, 64706, 138210, 294306, 625538, 1327234, 2810530, 5938658, 12520002 },
+	{ 2358, 5738, 13330, 29794, 64706, 138498, 294594, 624962, 1323778, 2799874, 5911874, 12458946, 26203266 },
+	{ 5264, 12574, 28858, 63986, 138210, 294594, 624386, 1320322, 2788354, 5881346, 12386946, 26044290, 54659330 },
+	{ 11644, 27382, 62186, 136914, 294306, 624962, 1320322, 2783746, 5862914, 12335106, 25918722, 54378242, 113897986 },
+	{ 25594, 59378, 133602, 292290, 625538, 1323778, 2788354, 5862914, 12316674, 25851906, 54200834, 113483266, 237249538 },
+	{ 55946, 128274, 286242, 622658, 1327234, 2799874, 5881346, 12335106, 25851906, 54140930, 113275906, 236715010, 493996034 },
+	{ 0.00012164400000, 0.00027605400000, 0.00061149800000, 0.00132334600000, 0.00281053000000, 0.00591187400000, 0.01238694600000,
+	  0.02591872200000, 0.05420083400000, 0.11327590600000, 0.23653990600000, 0.49340621000000, 1.02794445000000 },
+	{ 0.00026313600000, 0.00059180600000, 0.00130239400000, 0.00280549000000, 0.00593865800000, 0.01245894600000, 0.02604429000000,
+	  0.05437824200000,  0.11348326600000, 0.23671501000000, 0.49340621000000, 1.02746521800000, 2.13719449800000 },
+	{ 0.00056643800000, 0.00126394600000, 0.00276545800000, 0.00593232200000, 0.01252000200000, 0.02620326600000, 0.05465933000000,
+	  0.11389798600000,  0.23724953800000, 0.49399603400000, 1.02794445000000, 2.13719449800000, 4.43891712200000 }
+}
+
+for i = 11, 13 do
+	local arr = Flops[i]
+
+	for j = 1, #arr do
+		arr[j] = 1e9 * arr[j]
+	end
+end
+
+-- --
+local DimX, DimY, XMax, YMax
+
+-- --
+local Lx, Ly = {}, {}
+
+--
+local function FindSets (low, lset)
+	local index, size = 1, 0
+
+	while 2^(index - 1) < low do
+		index = index + 1
+	end
+
+	for i = index, 13 do
+		lset[size + 1], size = 2^(i - 1) - low + 1, size + 1
+	end
+
+	return size, index
+-- nx=1:13;
+-- validsetx=find(2.^(nx-1)>bx-1);
+-- nx=nx(validsetx);
+-- Lx=2.^(nx-1)-bx+1;
+-- sizex=length(nx);
+end
+
+--
+local function Find (bx, by, dimx, dimy)
+	local sizex, x = FindSets(bx, Lx)
+	local sizey, y = FindSets(by, Ly)
+	local vmin, xpos, ypos = huge
+
+	for j = 1, sizey do
+		local yfactor, xcur, row = ceil(dimy / Ly[j]), x, Flops[y]
+
+		for i = 1, sizex do
+			local curv = ceil(dimx / Lx[i]) * row[xcur]
+
+			if curv < vmin then
+				curv, xpos, ypos = vmin, xcur, y
+			end
+
+			xcur = xcur + 1
+		end
+
+		y = y + 1
+	end
+
+	return vmin, xpos, ypos
+	--[[
+    matrice=zeros(sizex,sizey);
+    for ii=1:sizex
+        for jj=1:sizey
+            matrice(ii,jj)=ceil(dimx/Lx(ii))*ceil(dimy/Ly(jj))*fftflops(nx(ii),ny(jj));
+        end
+    end
+    [massimo_vettore,posizione_vettore]=min(matrice);
+    [massimo,posizione]=min(massimo_vettore);
+    y_max=posizione;
+    x_max=posizione_vettore(posizione);
+    massimo;
+	]]
+end
+
+--- DOCME
+function M.OverlapAdd_2D (signal, kernel, scols, kcols, opts)
+	local sn, kn = #signal, #kernel
+	local srows = sn / scols
+	local krows = kn / kcols
+	local dimx = scols + kcols - 1
+	local dimy = srows + krows - 1
+
+	--
+	if dimx ~= DimX or dimy ~= DimY then
+		local max1, xmax1, ymax1 = Find(srows, krows, dimx, dimy)
+		local max2, xmax2, ymax2 = Find(scols, kcols, dimx, dimy)
+
+		if max1 < max2 then
+			XMax, YMax = xmax1, ymax1
+		else
+			XMax, YMax = xmax2, ymax2
+		end
+
+		DimX, DimY = dimx, dimy
+	end
+--[[
+    nx=1:13;
+    ny=1:13;
+    validsetx=find(2.^(nx-1)>bx-1);
+    validsety=find(2.^(ny-1)>by-1);
+    nx=nx(validsetx);
+    ny=ny(validsety);
+    Lx=2.^(nx-1)-bx+1;
+    Ly=2.^(ny-1)-by+1;
+    sizex=length(nx);
+    sizey=length(ny);
+    matrice=zeros(sizex,sizey);
+    for ii=1:sizex
+        for jj=1:sizey
+            matrice(ii,jj)=ceil(dimx/Lx(ii))*ceil(dimy/Ly(jj))*fftflops(nx(ii),ny(jj));
+        end
+    end
+    [massimo_vettore,posizione_vettore]=min(matrice);
+    [massimo,posizione]=min(massimo_vettore);
+    y_max=posizione;
+    x_max=posizione_vettore(posizione);
+    massimo;
+    %.......................................
+    nx2=1:13;
+    ny2=1:13;
+    validsetx2=find(2.^(nx2-1)>ax-1);
+    validsety2=find(2.^(ny2-1)>ay-1);
+    nx2=nx2(validsetx2);
+    ny2=ny2(validsety2);
+    Lx2=2.^(nx2-1)-ax+1;
+    Ly2=2.^(ny2-1)-ay+1;
+    sizex2=length(nx2);
+    sizey2=length(ny2);
+    matrice2=zeros(sizex2,sizey2);
+    for ii=1:sizex2
+        for jj=1:sizey2
+            matrice2(ii,jj)=ceil(dimx/Lx2(ii))*ceil(dimy/Ly2(jj))*fftflops(nx2(ii),ny2(jj));
+        end
+    end
+    [massimo_vettore2,posizione_vettore2]=min(matrice2);
+    [massimo2,posizione2]=min(massimo_vettore2);
+    y_max2=posizione2;
+    x_max2=posizione_vettore2(posizione2);
+    massimo2;]]
 end
 
 --[[
