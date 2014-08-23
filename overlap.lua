@@ -249,7 +249,9 @@ function M.OverlapSave_1D (signal, kernel, opts)
 		if diff > 0 then
 			count, up_to = n - diff, nconv
 
-			if is_periodic then								
+			if is_periodic then							
+
+	
 				Fill(B, wi, n, signal, Wrap(ri, sn), sn)
 
 				count = n
@@ -276,11 +278,7 @@ end
 
 -- --
 local Flops = {
-<<<<<<< HEAD
 	{ 14, 58, 172, 440, 1038, 2358, 5264, 11644, 25594, 55946, 121644, 263136, 566438 },
-=======
-	{ 14, 58,172, 440, 1038, 2358, 5264, 11644, 25594, 55946, 121644, 263136, 566438 },
->>>>>>> c37b21704177120532f66131d3411f4d627ffdc2
 	{ 58, 178, 470, 1134, 2586, 5738, 12574, 27382, 59378, 128274, 276054, 591806, 1263946 },
 	{ 172, 470, 1170, 2730, 6098, 13330, 28858, 62186, 133602, 286242, 611498, 1302394, 2765458 },
 	{ 440, 1134, 2730, 6242, 13762, 29794, 63986, 136914, 292290, 622658, 1323346, 2805490, 5932322 },
@@ -290,37 +288,16 @@ local Flops = {
 	{ 11644, 27382, 62186, 136914, 294306, 624962, 1320322, 2783746, 5862914, 12335106, 25918722, 54378242, 113897986 },
 	{ 25594, 59378, 133602, 292290, 625538, 1323778, 2788354, 5862914, 12316674, 25851906, 54200834, 113483266, 237249538 },
 	{ 55946, 128274, 286242, 622658, 1327234, 2799874, 5881346, 12335106, 25851906, 54140930, 113275906, 236715010, 493996034 },
-<<<<<<< HEAD
-	{ 121644, 276054, 611498, 1323346, 281053, 5911874, 12386946, 25918722, 54200834, 113275906, 236539906, 49340621, 1027944450 },
-	{ 263136, 591806, 1302394, 2805490, 5938658, 12458946, 2604429, 54378242, 113483266, 236715010, 493406210, 1027465218, 2137194498 },
-	{ 566438, 1263946, 2765458, 5932322, 12520002, 26203266, 5465933, 113897986, 237249538, 493996034, 1027944450, 2137194498, 4438917122 }
+	{ 121644, 276054, 611498, 1323346, 2810530, 5911874, 12386946, 25918722, 54200834, 113275906, 236539906, 493406210, 1027944450 },
+	{ 263136, 591806, 1302394, 2805490, 5938658, 12458946, 26044290, 54378242, 113483266, 236715010, 493406210, 1027465218, 2137194498 },
+	{ 566438, 1263946, 2765458, 5932322, 12520002, 26203266, 54659330, 113897986, 237249538, 493996034, 1027944450, 2137194498, 4438917122 }
 }
 
 -- --
-local SRows, SCols, KRows, KCols, XMax, YMax
-=======
-	{ 0.00012164400000, 0.00027605400000, 0.00061149800000, 0.00132334600000, 0.00281053000000, 0.00591187400000, 0.01238694600000,
-	  0.02591872200000, 0.05420083400000, 0.11327590600000, 0.23653990600000, 0.49340621000000, 1.02794445000000 },
-	{ 0.00026313600000, 0.00059180600000, 0.00130239400000, 0.00280549000000, 0.00593865800000, 0.01245894600000, 0.02604429000000,
-	  0.05437824200000,  0.11348326600000, 0.23671501000000, 0.49340621000000, 1.02746521800000, 2.13719449800000 },
-	{ 0.00056643800000, 0.00126394600000, 0.00276545800000, 0.00593232200000, 0.01252000200000, 0.02620326600000, 0.05465933000000,
-	  0.11389798600000,  0.23724953800000, 0.49399603400000, 1.02794445000000, 2.13719449800000, 4.43891712200000 }
-}
-
-for i = 11, 13 do
-	local arr = Flops[i]
-
-	for j = 1, #arr do
-		arr[j] = 1e9 * arr[j]
-	end
-end
+local SRows, SCols, KRows, KCols
 
 -- --
-local DimX, DimY, XMax, YMax
->>>>>>> c37b21704177120532f66131d3411f4d627ffdc2
-
--- --
-local Lx, Ly = {}, {}
+local LSetX, LSetY = {}, {}
 
 --
 local function FindSets (low, lset)
@@ -335,58 +312,47 @@ local function FindSets (low, lset)
 	end
 
 	return size, index
--- nx=1:13;
--- validsetx=find(2.^(nx-1)>bx-1);
--- nx=nx(validsetx);
--- Lx=2.^(nx-1)-bx+1;
--- sizex=length(nx);
 end
 
 --
 local function Find (bx, by, dimx, dimy)
-	local sizex, x = FindSets(bx, Lx)
-	local sizey, y = FindSets(by, Ly)
-	local vmin, xpos, ypos = huge
+	local sizex, x0 = FindSets(bx, LSetX)
+	local vmin, xi, yi, sizey, yc, yset = huge
 
-	for j = 1, sizey do
-		local yfactor, xcur, row = ceil(dimy / Ly[j]), x, Flops[y]
-
-		for i = 1, sizex do
-			local curv = ceil(dimx / Lx[i]) * row[xcur]
-
-			if curv < vmin then
-				curv, xpos, ypos = vmin, xcur, y
-			end
-
-			xcur = xcur + 1
-		end
-
-		y = y + 1
+	if bx == by then
+		sizey, yc, yset = sizex, x0, LSetX
+	else
+		sizey, yc = FindSets(by, LSetY)
+		yset = LSetY
 	end
 
-	return vmin, xpos, ypos
-	--[[
-    matrice=zeros(sizex,sizey);
-    for ii=1:sizex
-        for jj=1:sizey
-            matrice(ii,jj)=ceil(dimx/Lx(ii))*ceil(dimy/Ly(jj))*fftflops(nx(ii),ny(jj));
-        end
-    end
-    [massimo_vettore,posizione_vettore]=min(matrice);
-    [massimo,posizione]=min(massimo_vettore);
-    y_max=posizione;
-    x_max=posizione_vettore(posizione);
-    massimo;
-	]]
-<<<<<<< HEAD
-	--[[
-		If A is a matrix, min(A) treats the columns of A as vectors, returning a row vector containing the minimum element from each column.
+	for j = 1, sizey do
+		local yfactor, xc, row = ceil(dimy / yset[j]), x0, Flops[yc]
 
-		[C,I] = min(...) finds the indices of the minimum values of A, and returns them in output vector I. If there are several identical
-		minimum values, the index of the first one found is returned.
-	]]
-=======
->>>>>>> c37b21704177120532f66131d3411f4d627ffdc2
+		for i = 1, sizex do
+			local v = ceil(dimx / LSetX[i]) * row[xc]
+
+			if v < vmin then
+				vmin, xi, yi = v, xc, yc
+			end
+
+			xc = xc + 1
+		end
+
+		yc = yc + 1
+	end
+
+	return vmin, xi, yi
+end
+
+-- --
+local Nx, Ny, Lx, Ly, Swap
+
+--
+local function GetSizes (index, dim)
+	local n = 2^(index - 1)
+
+	return n, n - dim + 1
 end
 
 --- DOCME
@@ -398,215 +364,58 @@ function M.OverlapAdd_2D (signal, kernel, scols, kcols, opts)
 	local dimy = srows + krows - 1
 
 	--
-<<<<<<< HEAD
 	if srows ~= SRows or scols ~= SCols or krows ~= KRows or kcols ~= KCols then
-=======
-	if dimx ~= DimX or dimy ~= DimY then
->>>>>>> c37b21704177120532f66131d3411f4d627ffdc2
-		local max1, xmax1, ymax1 = Find(srows, krows, dimx, dimy)
-		local max2, xmax2, ymax2 = Find(scols, kcols, dimx, dimy)
+		local max1, ix1, iy1 = Find(kcols, krows, dimx, dimy)
+		local max2, ix2, iy2 = Find(scols, srows, dimx, dimy)
 
-		if max1 < max2 then
-			XMax, YMax = xmax1, ymax1
+		Swap = max2 < max1
+
+		if not Swap then
+			Nx, Lx = GetSizes(ix1, kcols)
+			Ny, Ly = GetSizes(iy1, krows)
 		else
-			XMax, YMax = xmax2, ymax2
+			Nx, Lx = GetSizes(ix2, scols)
+			Ny, Ly = GetSizes(iy2, srows)
 		end
 
-<<<<<<< HEAD
 		SRows, SCols = srows, scols
 		KRows, KCols = krows, kcols
-=======
-		DimX, DimY = dimx, dimy
->>>>>>> c37b21704177120532f66131d3411f4d627ffdc2
 	end
---[[
-    nx=1:13;
-    ny=1:13;
-    validsetx=find(2.^(nx-1)>bx-1);
-    validsety=find(2.^(ny-1)>by-1);
-    nx=nx(validsetx);
-    ny=ny(validsety);
-    Lx=2.^(nx-1)-bx+1;
-    Ly=2.^(ny-1)-by+1;
-    sizex=length(nx);
-    sizey=length(ny);
-    matrice=zeros(sizex,sizey);
-    for ii=1:sizex
-        for jj=1:sizey
-            matrice(ii,jj)=ceil(dimx/Lx(ii))*ceil(dimy/Ly(jj))*fftflops(nx(ii),ny(jj));
-        end
-    end
-    [massimo_vettore,posizione_vettore]=min(matrice);
-    [massimo,posizione]=min(massimo_vettore);
-    y_max=posizione;
-    x_max=posizione_vettore(posizione);
-    massimo;
-    %.......................................
-    nx2=1:13;
-    ny2=1:13;
-    validsetx2=find(2.^(nx2-1)>ax-1);
-    validsety2=find(2.^(ny2-1)>ay-1);
-    nx2=nx2(validsetx2);
-    ny2=ny2(validsety2);
-    Lx2=2.^(nx2-1)-ax+1;
-    Ly2=2.^(ny2-1)-ay+1;
-    sizex2=length(nx2);
-    sizey2=length(ny2);
-    matrice2=zeros(sizex2,sizey2);
-    for ii=1:sizex2
-        for jj=1:sizey2
-            matrice2(ii,jj)=ceil(dimx/Lx2(ii))*ceil(dimy/Ly2(jj))*fftflops(nx2(ii),ny2(jj));
-        end
-    end
-    [massimo_vettore2,posizione_vettore2]=min(matrice2);
-    [massimo2,posizione2]=min(massimo_vettore2);
-    y_max2=posizione2;
-    x_max2=posizione_vettore2(posizione2);
-    massimo2;]]
+
+	--
+	if Swap then
+		signal, kernel = kernel, signal
+	end
+
+	--
+	local csignal = opts and opts.into or {}
+
+	for i = 1, dimx * dimy do
+		csignal[i] = 0
+	end
+
+--	kernel2 = fft2(kernel, Nx, Ny);
+
+-- ???
+--	signal2 = signal
+--	signal2[dimx, dimy] = 0?
+
+	for xstart = 1, dimx, Lx do
+		local xend = min(xstart + Lx - 1, dimx)
+		local endx = min(dimx, xstart + Nx - 1)
+
+		for ystart = 1, dimy, Ly do
+			local yend = min(ystart + Ly - 1, dimy)
+
+			-- X = fft2(signal2[xstart : xend, ystart : yend], Nx, Ny)
+			-- Y = ifft2(X .* kernel2)
+
+			local endy = min(dimy, ystart + Ny - 1)
+
+			-- csignal[xstart : endx, ystart : endy] = csignal[xstart : endx, ystart : endy] + Y[1 : endx - xstart + 1, 1 : endy - ystart + 1]
+		end
+	end
 end
-
---[[
-[ax,ay]=size(a);
-[bx,by]=size(b);
-dimx=ax+bx-1;
-dimy=ay+by-1;
-
-if (nargin<3)||(mode==0) 
-    % figure out which nfftx, nffty, Lx and Ly to use
-    %--------------------------------------------------------------------------    ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-    fftflops=zeros(13);
-    fftflops(1:10,:)=[14          58         172         440        1038        2358     5264       11644       25594       55946      121644      263136     566438;...
-            58         178         470        1134        2586        5738     12574       27382       59378      128274      276054      591806    1263946;...
-            172         470        1170        2730        6098       13330    28858       62186      133602      286242      611498     1302394    2765458;...
-            440        1134        2730        6242       13762       29794    63986      136914      292290      622658     1323346     2805490    5932322;...
-            1038        2586        6098       13762       30082       64706   138210      294306      625538     1327234     2810530     5938658   12520002;...
-            2358        5738       13330       29794       64706      138498   294594      624962     1323778     2799874     5911874    12458946   26203266;...
-            5264       12574       28858       63986      138210      294594   624386     1320322     2788354     5881346    12386946    26044290   54659330;...
-            11644       27382       62186      136914      294306      624962  1320322     2783746     5862914    12335106    25918722    54378242  113897986;...
-            25594       59378      133602      292290      625538     1323778  2788354     5862914    12316674    25851906    54200834   113483266  237249538;...
-            55946      128274      286242      622658     1327234     2799874  5881346    12335106    25851906    54140930   113275906   236715010  493996034];
-    fftflops(11:13,:)=1.0e+009 *[0.00012164400000   0.00027605400000   0.00061149800000   0.00132334600000     0.00281053000000   0.00591187400000   0.01238694600000   0.02591872200000    0.05420083400000   0.11327590600000   0.23653990600000   0.49340621000000    1.02794445000000;...
-            0.00026313600000   0.00059180600000   0.00130239400000   0.00280549000000     0.00593865800000   0.01245894600000   0.02604429000000   0.05437824200000    0.11348326600000   0.23671501000000   0.49340621000000   1.02746521800000    2.13719449800000;...
-            0.00056643800000   0.00126394600000   0.00276545800000   0.00593232200000     0.01252000200000   0.02620326600000   0.05465933000000   0.11389798600000    0.23724953800000   0.49399603400000   1.02794445000000   2.13719449800000    4.43891712200000]; 
-    
-    
-    
-    
-    %.....................................
-    nx=1:13;
-    ny=1:13;
-    validsetx=find(2.^(nx-1)>bx-1);
-    validsety=find(2.^(ny-1)>by-1);
-    nx=nx(validsetx);
-    ny=ny(validsety);
-    Lx=2.^(nx-1)-bx+1;
-    Ly=2.^(ny-1)-by+1;
-    sizex=length(nx);
-    sizey=length(ny);
-    matrice=zeros(sizex,sizey);
-    for ii=1:sizex
-        for jj=1:sizey
-            matrice(ii,jj)=ceil(dimx/Lx(ii))*ceil(dimy/Ly(jj))*fftflops(nx(ii),ny(jj));
-        end
-    end
-    [massimo_vettore,posizione_vettore]=min(matrice);
-    [massimo,posizione]=min(massimo_vettore);
-    y_max=posizione;
-    x_max=posizione_vettore(posizione);
-    massimo;
-    %.......................................
-    nx2=1:13;
-    ny2=1:13;
-    validsetx2=find(2.^(nx2-1)>ax-1);
-    validsety2=find(2.^(ny2-1)>ay-1);
-    nx2=nx2(validsetx2);
-    ny2=ny2(validsety2);
-    Lx2=2.^(nx2-1)-ax+1;
-    Ly2=2.^(ny2-1)-ay+1;
-    sizex2=length(nx2);
-    sizey2=length(ny2);
-    matrice2=zeros(sizex2,sizey2);
-    for ii=1:sizex2
-        for jj=1:sizey2
-            matrice2(ii,jj)=ceil(dimx/Lx2(ii))*ceil(dimy/Ly2(jj))*fftflops(nx2(ii),ny2(jj));
-        end
-    end
-    [massimo_vettore2,posizione_vettore2]=min(matrice2);
-    [massimo2,posizione2]=min(massimo_vettore2);
-    y_max2=posizione2;
-    x_max2=posizione_vettore2(posizione2);
-    massimo2;
-    %.......................................
-    if massimo<massimo2
-        nfftx=2^(nx(x_max)-1);
-        nffty=2^(ny(y_max)-1);
-        
-        Lx=nfftx-bx+1;
-        Ly=nffty-by+1;
-        %--------------------------------------------------------------------------    ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-        B=fft2(b,nfftx,nffty);
-        out=zeros(dimx,dimy);
-        a2=a;
-        a2(dimx,dimy)=0;
-        
-        xstart=1;
-        while xstart <= dimx
-            xend=min(xstart+Lx-1,dimx);
-            ystart=1;
-            while ystart <= dimy
-                yend=min(ystart+Ly-1,dimy);
-                %---------------------
-                X=fft2(a2(xstart:xend,ystart:yend),nfftx,nffty);
-                Y=ifft2(X.*B);
-                endx=min(dimx,xstart+nfftx-1);
-                endy=min(dimy,ystart+nffty-1);
-                out(xstart:endx,ystart:endy)=out(xstart:endx,ystart:endy)+Y(1:(endx-xstart+1),1:(endy-ystart+1));
-                ystart=ystart+Ly;
-                %---------------------
-            end
-            xstart=xstart+Lx;
-        end
-        
-        if ~(any(any(imag(a)))||any(any(imag(b))))
-            out=real(out);
-        end
-        return;
-    else
-        nfftx=2^(nx2(x_max2)-1);
-        nffty=2^(ny2(y_max2)-1);
-        
-        Lx2=nfftx-ax+1;
-        Ly2=nffty-ay+1;
-        %--------------------------------------------------------------------------    ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-        A=fft2(a,nfftx,nffty);
-        out=zeros(dimx,dimy);
-        b2=b;
-        b2(dimx,dimy)=0;
-        
-        xstart=1;
-        while xstart <= dimx
-            xend=min(xstart+Lx2-1,dimx);
-            ystart=1;
-            while ystart <= dimy
-                yend=min(ystart+Ly2-1,dimy);
-                %---------------------
-                X=fft2(b2(xstart:xend,ystart:yend),nfftx,nffty);
-                Y=ifft2(X.*A);
-                endx=min(dimx,xstart+nfftx-1);
-                endy=min(dimy,ystart+nffty-1);
-                out(xstart:endx,ystart:endy)=out(xstart:endx,ystart:endy)+Y(1:(endx-xstart+1),1:(endy-ystart+1));
-                ystart=ystart+Ly2;
-                %---------------------
-            end
-            xstart=xstart+Lx2;
-        end
-        
-        if ~(any(any(imag(a)))||any(any(imag(b))))
-            out=real(out);
-        end
-        return;
-    end
-]]
 
 -- Export the module.
 return M
