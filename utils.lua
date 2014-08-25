@@ -42,23 +42,44 @@ function M.LenPower (n1, n2)
 	return len, n
 end
 
+--- DOCMEMORE
+-- Precomputed kernel method
+function M.MakePrecomputedKernelFunc_1D (out)
+	return function(n, signal, sn, kernel)
+		fft_utils.PrepareRealFFT_1D(out, n, signal, sn)
+		real_fft.RealFFT_1D(out, n)
+		fft_utils.Multiply_1D(out, kernel, n)
+	end
+end
+
+--- DOCMEMORE
+-- Precomputed kernel method
+function M.MakePrecomputedKernelFunc_2D (out)
+	return function(m, n, signal, scols, sn, kernel, area)
+		fft_utils.PrepareRealFFT_2D(out, area, signal, scols, m, sn)
+		real_fft.RealFFT_2D(out, m, n)
+		fft_utils.Multiply_2D(out, kernel, m, n)
+	end
+end
+
 --- DOCMEORE
 -- Common 1D precomputations
-function M.PrecomputeKernel1D (out, n, kernel, kn)
+function M.PrecomputeKernel_1D (out, n, kernel, kn)
 	fft_utils.PrepareRealFFT_1D(out, n, kernel, kn)
 	real_fft.RealFFT_1D(out, n)
 
 	out.n = kn
 end
 
---- DOCMEMORE
--- Precomputed kernel method
-function M.MakePrecomputedKernelFunc1D (out)
-	return function(n, signal, sn, kernel)
-		fft_utils.PrepareRealFFT_1D(out, n, signal, sn)
-		real_fft.RealFFT_1D(out, n)
-		fft_utils.Multiply_1D(out, kernel, n)
-	end
+--- DOCMEORE
+-- Common 2D precomputations
+function M.PrecomputeKernel_2D (out, m, n, kernel, kcols, kn)
+	local area = m * n
+
+	fft_utils.PrepareRealFFT_2D(out, area, kernel, kcols, m, kn)
+	real_fft.RealFFT_2D(out, m, n)
+
+	out.n = kn
 end
 
 -- Export the module.

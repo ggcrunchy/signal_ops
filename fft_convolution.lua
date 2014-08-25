@@ -50,7 +50,7 @@ function AuxMethod1D.goertzel (n, signal, sn, kernel, kn)
 end
 
 -- Precomputed kernel method
-AuxMethod1D.precomputed_kernel = signal_utils.MakePrecomputedKernelFunc1D(B)
+AuxMethod1D.precomputed_kernel = signal_utils.MakePrecomputedKernelFunc_1D(B)
 
 -- Separate FFT's method
 function AuxMethod1D.separate (n, signal, sn, kernel, kn)
@@ -125,10 +125,10 @@ function AuxMethod2D.goertzel (m, n, signal, scols, kernel, kcols, sn, kn)
 end
 
 -- Precomputed kernel method
+local PrecomputedKernel2D = signal_utils.MakePrecomputedKernelFunc_2D(B)
+
 function AuxMethod2D.precomputed_kernel (m, n, signal, scols, kernel, _, sn, _, area)
-	fft_utils.PrepareRealFFT_2D(B, area, signal, scols, m, sn)
-	real_fft.RealFFT_2D(B, m, n)
-	fft_utils.Multiply_2D(B, kernel, m, n)
+	PrecomputedKernel2D(m, n, signal, scols, sn, kernel, area)
 end
 
 -- Separate FFT's method
@@ -208,7 +208,7 @@ function M.PrecomputeKernel_1D (out, sn, kernel)
 	local kn = #kernel
 	local _, n = LenPower(sn, kn)
 
-	signal_utils.PrecomputeKernel1D(out, n, kernel, kn)
+	signal_utils.PrecomputeKernel_1D(out, n, kernel, kn)
 end
 
 --- Precomputes a kernel, e.g. for consumption by the **"precomputed_kernel"** option of
@@ -224,12 +224,8 @@ function M.PrecomputeKernel_2D (out, sn, kernel, scols, kcols)
 	local krows = kn / kcols
 	local _, m = LenPower(scols, kcols)
 	local _, n = LenPower(srows, krows)
-	local area = m * n
 
-	fft_utils.PrepareRealFFT_2D(out, area, kernel, kcols, m, kn)
-	real_fft.RealFFT_2D(out, m, n)
-
-	out.n = kn
+	signal_utils.PrecomputeKernel_2D(out, m, n, kernel, kcols, kn)
 end
 
 --- Enters a loop, fetching a new signal on each iteration.

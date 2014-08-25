@@ -67,14 +67,14 @@ local M = {}
 local B, C = {}, {}
 
 --
-local PrecomputedKernelFunc = signal_utils.MakePrecomputedKernelFunc1D(B)
+local PrecomputedKernelFunc1D = signal_utils.MakePrecomputedKernelFunc_1D(B)
 
 -- Computes a reasonable block length and pretransforms the kernel
 local function TransformKernel1D (kernel, kn)
 	local overlap = kn - 1
 	local _, n = signal_utils.LenPower(4 * overlap, kn)
 
-	signal_utils.PrecomputeKernel1D(C, n, kernel, kn)
+	signal_utils.PrecomputeKernel_1D(C, n, kernel, kn)
 
 	return overlap, n, .5 * n
 end
@@ -119,7 +119,7 @@ function M.OverlapAdd_1D (signal, kernel, opts)
 		end
 
 		-- Multiply the (complex) results...
-		PrecomputedKernelFunc(n, B, count, C, kn)
+		PrecomputedKernelFunc1D(n, B, count, C, kn)
 
 		-- ...transform back to the time domain...
 		real_fft.RealIFFT_1D(B, halfn)
@@ -261,7 +261,7 @@ function M.OverlapSave_1D (signal, kernel, opts)
 		-- ^^^ TODO: Could it possibly spill over into one more (degenerate?) block?
 
 		-- Multiply the (complex) results...
-		PrecomputedKernelFunc(n, B, count, C, kn)
+		PrecomputedKernelFunc1D(n, B, count, C, kn)
 
 		-- ...transform back to the time domain...
 		real_fft.RealIFFT_1D(B, halfn)
@@ -298,7 +298,7 @@ local Flops = {
 local SRows, SCols, KRows, KCols
 
 -- --
-local LSetX, LSetY = {}, {}
+local LSetX, LSetY = B, C
 
 --
 local function FindSets (low, lset)
@@ -386,34 +386,46 @@ function M.OverlapAdd_2D (signal, kernel, scols, kcols, opts)
 	--
 	if Swap then
 		signal, kernel = kernel, signal
+		kcols, scols, kn = scols, kcols, sn
 	end
 
 	--
-	local csignal = opts and opts.into or {}
-	local area = Nx * Ny
+	local csignal, area, halfnx, blockn = opts and opts.into or {}, Nx * Ny, .5 * Nx, Ly * dimx
 
 	for i = 1, dimx * dimy do
 		csignal[i] = 0 -- TODO: Find a way to not need this, i.e. decide whether slot has yet been visited...
 	end
 
---	kernel2 = fft2(kernel, Nx, Ny);
+	signal_utils.PrecomputeKernel_2D(C, Nx, Ny, kernel, kcols, kn)
 
 	for xstart = 1, dimx, Lx do
-		local xn = min(xstart + Lx - 1, dimx) - xstart + 1
-		local endx = min(xstart + Nx - 1, dimx)
+		local xn, pos = min(xstart + Lx - 1, scols) - xstart + 1, xstart
+		local xcount = min(xstart + Nx - 1, dimx) - xstart + 1
 
 		for ystart = 1, dimy, Ly do
-			local yn = min(ystart + Ly - 1, dimy) - ystart + 1
+			local yn = min(ystart + Ly - 1, srows) - ystart + 1
 
-			fft_utils.PrepareRealFFT_Submatrix2D(B, area, signal, xstart, ystart, xn, yn, Nx)
+			fft_utils.PrepareRealFFT_Submatrix2D(B, area, signal, xstart, ystart, xn, yn, Nx, scols)
 			real_fft.RealFFT_2D(B, Nx, Ny)
+			fft_utils.Multiply_2D(B, C, Nx, Ny)
 
-			-- X = fft2(signal2[xstart : xend, ystart : yend], Nx, Ny)
-			-- Y = ifft2(X .* kernel2)
+			-- ...transform back to the time domain...
+			real_fft.RealIFFT_2D(B, halfnx, Ny)
 
-			local endy = min(ystart + Ny - 1, dimy)
+			--
+			local offset, index = 0, pos - 1
 
-			-- csignal[xstart : endx, ystart : endy] = csignal[xstart : endx, ystart : endy] + Y[1 : endx - xstart + 1, 1 : endy - ystart + 1]
+			for _ = 1, min(ystart + Ny - 1, dimy) - ystart + 1 do
+				for i = 1, xcount do
+					local pi = index + i
+
+					csignal[pi] = csignal[pi] + B[offset + i]
+				end
+-- Split up to not do zeroes?
+				offset, index = offset + Nx, index + dimx
+			end
+
+			pos = pos + blockn
 		end
 	end
 end
