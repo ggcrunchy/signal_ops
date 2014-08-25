@@ -56,6 +56,7 @@ local huge = math.huge
 local min = math.min
 
 -- Modules --
+local fft_utils = require("dft_ops.utils")
 local real_fft = require("dft_ops.real_fft")
 local signal_utils = require("signal_ops.utils")
 
@@ -330,7 +331,7 @@ local function Find (bx, by, dimx, dimy)
 		local yfactor, xc, row = ceil(dimy / yset[j]), x0, Flops[yc]
 
 		for i = 1, sizex do
-			local v = ceil(dimx / LSetX[i]) * row[xc]
+			local v = yfactor * ceil(dimx / LSetX[i]) * row[xc]
 
 			if v < vmin then
 				vmin, xi, yi = v, xc, yc
@@ -389,28 +390,28 @@ function M.OverlapAdd_2D (signal, kernel, scols, kcols, opts)
 
 	--
 	local csignal = opts and opts.into or {}
+	local area = Nx * Ny
 
 	for i = 1, dimx * dimy do
-		csignal[i] = 0
+		csignal[i] = 0 -- TODO: Find a way to not need this, i.e. decide whether slot has yet been visited...
 	end
 
 --	kernel2 = fft2(kernel, Nx, Ny);
 
--- ???
---	signal2 = signal
---	signal2[dimx, dimy] = 0?
-
 	for xstart = 1, dimx, Lx do
-		local xend = min(xstart + Lx - 1, dimx)
-		local endx = min(dimx, xstart + Nx - 1)
+		local xn = min(xstart + Lx - 1, dimx) - xstart + 1
+		local endx = min(xstart + Nx - 1, dimx)
 
 		for ystart = 1, dimy, Ly do
-			local yend = min(ystart + Ly - 1, dimy)
+			local yn = min(ystart + Ly - 1, dimy) - ystart + 1
+
+			fft_utils.PrepareRealFFT_Submatrix2D(B, area, signal, xstart, ystart, xn, yn, Nx)
+			real_fft.RealFFT_2D(B, Nx, Ny)
 
 			-- X = fft2(signal2[xstart : xend, ystart : yend], Nx, Ny)
 			-- Y = ifft2(X .* kernel2)
 
-			local endy = min(dimy, ystart + Ny - 1)
+			local endy = min(ystart + Ny - 1, dimy)
 
 			-- csignal[xstart : endx, ystart : endy] = csignal[xstart : endx, ystart : endy] + Y[1 : endx - xstart + 1, 1 : endy - ystart + 1]
 		end
