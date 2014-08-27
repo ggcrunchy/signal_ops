@@ -1,6 +1,6 @@
 --- Convolution based on overlap-add and overlap-save algorithms.
 --
--- Overlap code may be adapted from:
+-- Overlap code may be adapted from [CONV2 Overlap-add Method](http://www.mathworks.jp/matlabcentral/fileexchange/4373-conv2-overlap-add-method):
 --
 -- Copyright (c) 2009, Luigi Rosa
 -- All rights reserved.
