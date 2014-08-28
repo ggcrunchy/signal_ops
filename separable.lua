@@ -51,32 +51,38 @@
 -- [ MIT license: http://www.opensource.org/licenses/mit-license.php ]
 --
 
+-- Standard library imports --
+local abs = math.abs
+local huge = math.huge
+local log = math.log
+local random = math.random
+
 -- Exports --
 local M = {}
 
 -- 
 local function Filter1DToFilterND (par, data, K1)
-	if nargin==2 then
-	 Kt=ones(data.sizeH)
+	if not K1 then
+		Kt = ones(data.sizeH)
  
-	 for i = 1, data.n do
---		 p = par(data.sep_parb(i) : data.sep_pare(i))
---		 p = p(:)
-		 dim = ones(1, data.n)
---		 dim(i) = data.sep_parl(i)
---		 Ki = reshape(p(:), dim)
-		 dim = data.sizeH
---		 dim(i) = 1
---		 Kt = Kt .* repmat(Ki, dim)
-	 end
+		for i = 1, data.n do
+		--		 p = par(data.sep_parb(i) : data.sep_pare(i))
+		--		 p = p(:)
+			dim = ones(1, data.n)
+		--		 dim(i) = data.sep_parl(i)
+		--		 Ki = reshape(p(:), dim)
+			dim = data.sizeH
+		--		 dim(i) = 1
+		--		 Kt = Kt .* repmat(Ki, dim)
+		end
 	else
-	  Kt=ones(data.sizeHreal)
-  
-	  for i = 1, data.n do
-		dim = data.sizeHreal
---		dim(i) = 1
---		Kt = Kt .* repmat(K1{i}, dim)
-	  end
+		Kt = ones(data.sizeHreal)
+
+		for i = 1, data.n do
+			dim = data.sizeHreal
+		--		dim(i) = 1
+		--		Kt = Kt .* repmat(K1{i}, dim)
+		end
 	end
 
 	return Kt
@@ -84,9 +90,10 @@ end
 
 --
 local function FilterCorrSign (par, data)
+	local t = 0
 	Ert = zeros(1, length(par))
-	ERR = inf
-	t = 0
+	ERR = huge
+
 --	par = sign(rand(size(par)) - 0.5) .* par
 
 	while t < ERR do
@@ -119,10 +126,12 @@ end
 
 --
 local function RemoveZeroRows (H)
+	local pz = 0
+
 	-- Remove whole columns / rows / planes with zeros, because we know beforehand that they
 	-- will give a kernel 1D value of 0 and will otherwise increase the error in the end result.
 	preserve_zeros = zeros(numel(H), 2)
-	pz=0
+
 	sizeH = size(H)
 
 	for i = 1, ndims(H) do
@@ -152,25 +161,37 @@ local function RemoveZeroRows (H)
 	return H, preserve_zeros
 end
 
+-- numel() = what I call area elsewhere
+-- ndims() = obvious
+-- size() = array of dims, e.g. { W, H }
+-- length() = max(W, H, etc.), apparently
+
 --
 local function InitializeDataStruct (H)
 	data.sizeHreal = size(H)
 	data.nreal = ndims(H)
+
 	H, preserve_zeros = RemoveZeroRows(H)
+
 	data.H = H
+
 	data.n = ndims(H)
 	data.preserve_zeros = preserve_zeros
+
 --	data.H(H == 0) = eps
 	data.sizeH = size(data.H)
+
 --	data.sep_parb = cumsum([1 data.sizeH(1 : data.n - 1)])
 	data.sep_pare = cumsum(data.sizeH)
 	data.sep_parl = data.sep_pare - data.sep_parb + 1
+
 --	data.par = (1 : numel(H)) + 1
+
 	return data
 end
 
 --
-local function ReaddZeroRows (data, K1)
+local function RestoreZeroRows (data, K1)
 	-- Re-add the 1D kernel values responding to a whole column / row or plane of zeros.
 	for i = 1, size(data.preserve_zeros, 1) do
 		di = data.preserve_zeros(i, 1)
@@ -193,35 +214,55 @@ end
 
 --
 local function MakeMatrix (data)
-	 M = zeros(numel(data.H), sum(data.sizeH))
---	 K1 = (1 : numel(data.H))'
+	M = zeros(numel(data.H), sum(data.sizeH))
+	--	 K1 = (1 : numel(data.H))'
 
-	 for i = 1, data.n do
---		p = data.par(data.sep_parb(i) : data.sep_pare(i))
---		p = p(:)
+	for i = 1, data.n do
+	--		p = data.par(data.sep_parb(i) : data.sep_pare(i))
+	--		p = p(:)
 		dim = ones(1, data.n)
---		dim(i) = data.sep_parl(i)
---		Ki = reshape(p(:), dim)
+	--		dim(i) = data.sep_parl(i)
+	--		Ki = reshape(p(:), dim)
 		dim = data.sizeH
---		dim(i) = 1
+	--		dim(i) = 1
 		K2 = repmat(Ki, dim) - 1
---		M(sub2ind(size(M), K1(:), K2(:))) = 1
-	 end
+	--		M(sub2ind(size(M), K1(:), K2(:))) = 1
+	end
  
 	return M
 end 
 
 --
 local function ValueListToFilter1D (par, data)
-	 K = cell(1, data.n)
- 
-	 for i = 1, data.n do
---		 p = par(data.sep_parb(i) : data.sep_pare(i))
---		 p = p(:)
-		 dim = ones(1, data.n)
---		 dim(i) = data.sep_parl(i)
---		 K{i}=reshape(p(:), dim)
-	 end
+--[[
+	C = cell(dim) creates a cell array of empty matrices. If dim is a scalar, C is dim-by-dim. If dim is a vector, C is dim(1)-by-...-dim(N), where N is the number of elements of dim.
+
+	C = cell(dim1,...,dimN) creates cell array C, where C is dim1-by-...-dimN.
+
+dim1,...,dimN
+	Scalar integers that specify the dimensions of C.
+
+	C
+	Cell array. Each cell contains an empty, 0-by-0 array of type double.
+
+Conversion to Column Vector
+
+	Convert a matrix or array to a column vector using the colon operator as a single index:
+
+	A = rand(3,4);
+	B = A(:);
+
+Use curly braces to construct or get the contents of cell arrays.
+]]
+	K = cell(1, data.n)
+
+	for i = 1, data.n do
+	--		 p = par(data.sep_parb(i) : data.sep_pare(i))
+	--		 p = p(:)
+		dim = ones(1, data.n)
+	--		 dim(i) = data.sep_parl(i) -> dim = { 1, 1, ..., sep_parl[i], ..., 1, 1 }
+	--		 K{i}=reshape(p(:), dim)
+	end
  
 	return K 
 end 
@@ -364,7 +405,12 @@ function M.SeparateKernel (kernel, kcols)
 
 	-- Make the matrix of c = M * d.
 --	M = MakeMatrix(data)
-
+--[[
+Solve systems of linear equations Ax = B for x
+Syntax
+	x = A\B, thus
+	d = M \ c
+]]
 	-- Solve c = M * d with least squares.
 --	par = exp(M \ log(abs(data.H(:))))
 
@@ -380,13 +426,13 @@ function M.SeparateKernel (kernel, kcols)
 --	K1 = ValueListToFilter1D(par, data)
 
 	-- Re-add the removed zero rows/planes to the 1D vectors.
---	K1 = ReaddZeroRows(data, K1);
+--	K1 = RestoreZeroRows(data, K1)
 
 	-- Calculate the approximation of the ND kernel if using the 1D kernels.
---	KN = Filter1DToFilterND(par, data, K1);
+--	KN = Filter1DToFilterND(par, data, K1)
 
 	-- Calculate the absolute error.
---	ERR = sum(abs(H(:) - KN(:)));
+--	ERR = sum(abs(H(:) - KN(:)))
 end
 
 -- Export the module.
