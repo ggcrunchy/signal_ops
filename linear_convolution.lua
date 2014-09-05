@@ -33,8 +33,8 @@ local M = {}
 -- @array signal Real discrete signal...
 -- @array kernel ...and kernel.
 -- @treturn array Convolution, of size #_signal_ + #_kernel_ - 1.
-function M.Convolve_1D (signal, kernel)
-	local sn, kn, csignal = #signal, #kernel, {}
+function M.Convolve_1D (signal, kernel, opts)
+	local sn, kn, csignal = #signal, #kernel, opts and opts.into or {}
 
 	-- If the kernel is wider than the signal, swap roles (commutability of convolution).
 	if sn < kn then
@@ -87,7 +87,7 @@ function AuxConvolve2D.compact (--[[signal, kernel, scols, kcols, srows, krows]]
 end
 
 -- "full" 2D convolution shape
-function AuxConvolve2D.full (signal, kernel, scols, kcols)
+function AuxConvolve2D.full (signal, kernel, scols, kcols, opts)
 	-- If the kernel is wider than the signal, swap roles (commutability of convolution).
 	if scols < kcols then
 		signal, kernel, scols, kcols = kernel, signal, kcols, scols
@@ -97,7 +97,7 @@ function AuxConvolve2D.full (signal, kernel, scols, kcols)
 	local sn, kn = #signal, #kernel
 	local srows, krows = sn / scols, kn / kcols
 	local rfrom, rto = 1, 1
-	local csignal, index, si = {}, 1, 0
+	local csignal, index, si = opts and opts.into or {}, 1, 0
 
 	for row = 1, srows + krows - 1 do
 		-- Kernel partially outside signal, to left...
@@ -168,11 +168,11 @@ function AuxConvolve2D.full (signal, kernel, scols, kcols)
 end
 
 -- "same" 2D convolution shape
-function AuxConvolve2D.same (signal, kernel, scols, kcols)
+function AuxConvolve2D.same (signal, kernel, scols, kcols, opts)
 	local sn, kn = #signal, #kernel
 	local srows, krows = sn / scols, kn / kcols
-	local csignal, roff = {}, -floor(.5 * krows)
-	local ri0, cx = roff * scols, floor(.5 * kcols)
+	local csignal, roff = opts and opts.into or {}, -floor(.5 * krows)
+	local ri0, cx, n = roff * scols, floor(.5 * kcols), 0
 -- Use max(sn, kn)? (some Python or MATLAB lib does that...)
 	for _ = 1, srows do
 		local coff = -cx
@@ -200,13 +200,13 @@ function AuxConvolve2D.same (signal, kernel, scols, kcols)
 				kr, ri = kr - kcols, ri + scols
 			end
 
-			csignal[#csignal + 1], coff = sum, coff + 1
+			csignal[n + 1], coff, n = sum, coff + 1, n + 1
 		end
 
 		roff, ri0 = roff + 1, ri0 + scols
 	end
 
-	return csignal, sn
+	return csignal, scols
 end
 
 -- Default shape for linear convolution
@@ -225,8 +225,8 @@ local DefConvolve2D = AuxConvolve2D.full
 -- * For **"compact"**: _scols_ - _kcols_ + 1.
 -- * For **"full"**: _scols_ + _kcols_ - 1.
 -- * For **"same"**: _scols_.
-function M.Convolve_2D (signal, kernel, scols, kcols, shape)
-	return (AuxConvolve2D[shape] or DefConvolve2D)(signal, kernel, scols, kcols)
+function M.Convolve_2D (signal, kernel, scols, kcols, opts)
+	return (AuxConvolve2D[opts and opts.shape] or DefConvolve2D)(signal, kernel, scols, kcols, opts)
 end
 
 -- Export the module.

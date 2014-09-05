@@ -33,8 +33,8 @@ local Ring = {}
 -- @array signal Real discrete signal...
 -- @array kernel ...and kernel.
 -- @treturn array Convolution, of size #_signal_.
-function M.Convolve_1D (signal, kernel)
-	local sn, kn, csignal = #signal, #kernel, {}
+function M.Convolve_1D (signal, kernel, opts)
+	local sn, kn, csignal = #signal, #kernel, opts and opts.into or {}
 
 	-- If the kernel is wider than the signal, swap roles (commutability of convolution).
 	if sn < kn then
@@ -73,7 +73,7 @@ end
 -- @uint scols Number of columns in _signal_... 
 -- @uint kcols ... and in _kernel_.
 -- @treturn array Convolution, with dimensions and layout as per _signal_.
-function M.Convolve_2D (signal, kernel, scols, kcols)
+function M.Convolve_2D (signal, kernel, scols, kcols, opts)
 	-- If the kernel is wider than the signal, swap roles (commutability of convolution).
 	if scols < kcols then
 		signal, kernel, scols, kcols = kernel, signal, kcols, scols
@@ -86,7 +86,7 @@ function M.Convolve_2D (signal, kernel, scols, kcols)
 	-- Cache the indices at which each row begins, starting with enough of the tail end of
 	-- the signal to ovelap the off-signal part of the kernel on the first few iterations.
 	local rt, mid = sn - scols + 1, 1
-	local csignal, index, pad = {}, 1, krows - 1
+	local csignal, index, pad = opts and opts.into or {}, 1, krows - 1
 
 	for i = 1, pad do
 		Ring[i], rt = rt, rt - scols
