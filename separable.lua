@@ -38,30 +38,42 @@ local Convolve_2D = linear_convolution.Convolve_2D
 local M = {}
 
 -- --
-local Opts1, Opts2 = { into = {}, shape = "same" }, { shape = "same" }
+local Opts1, Opts2 = { into = {} }, {}
 
--- --
+-- Intermediate convolution target, once accumulation kicks off --
 local ToAdd = {}
 
 --- DOCME
-function M.Convolve_2D (signal, kernel, scols, opts)
-	local csignal, max_rank = opts and opts.into or {}, opts and opts.max_rank or kernel.max_rank
+function M.Convolve_2D (signal, scols, decomp, opts)
+	local csignal, sn, p = opts and opts.into or {}, opts and opts.sn or #signal, decomp.p
+	local max_rank, srows = opts and opts.max_rank or decomp.max_rank, sn / scols
+	local n = (scols + p - 1) * (srows + decomp.q - 1)
 
+	-- Typical case: matrix was successfully decomposed.
 	if max_rank > 0 then
+		local u, v = decomp.uarr, decomp.varr
+
+		-- Ideally, the matrix was separable, in which case one set of convolutions suffices. In
+		-- any case, at this point the output signal and accumulator are the same thing.
 		Opts2.into = csignal
 
-		--
-		local n, u, v = kernel.n, kernel.uarr, kernel.varr
+		Convolve_2D(Convolve_2D(signal, u[1], scols, 1, Opts1), v[1], scols, p, Opts2)
 
-		Convolve_2D(Convolve_2D(signal, u[1], scols, 1, Opts1), v[1], scols, n, Opts2)
-
+		-- If the matrix was non-separable, refine the approximation with as many convolutions as
+		-- the user allows, or until rank is reached, when the refinement is almost exact.
 		Opts2.into = ToAdd
 
-		for i = 2, min(max_rank, kernel.max_rank) do
-			--
+		for i = 2, min(max_rank, decomp.max_rank) do
+			Convolve_2D(Convolve_2D(signal, u[i], scols, 1, Opts1), v[i], scols, p, Opts2)
+
+			for j = 1, n do
+				csignal[j] = csignal[j] + ToAdd[j]
+			end
 		end
+
+	-- Degenerate matrix: all zeroes.
 	else
-		for i = 1, #signal do
+		for i = 1, n do
 			csignal[i] = 0
 		end
 	end
@@ -103,7 +115,7 @@ function M.DecomposeKernel (kernel, kcols, opts)
 			uarr[i], varr[i] = uv, vv
 		end
 
-		decomp.max_rank, decomp.n = FindRank(s, kcols), kcols
+		decomp.max_rank, decomp.p, decomp.q = FindRank(s, kcols), kcols, kcols
 	else
 		-- ...
 	end
