@@ -34,7 +34,7 @@ local M = {}
 -- @array kernel ...and kernel.
 -- @treturn array Convolution, of size #_signal_ + #_kernel_ - 1.
 function M.Convolve_1D (signal, kernel, opts)
-	local sn, kn, csignal = #signal, #kernel, opts and opts.into or {}
+	local sn, kn, csignal, offset = #signal, #kernel, opts and opts.into or {}, opts and opts.offset or 0
 
 	-- If the kernel is wider than the signal, swap roles (commutability of convolution).
 	if sn < kn then
@@ -49,10 +49,12 @@ function M.Convolve_1D (signal, kernel, opts)
 			sum, ki = sum + signal[si] * kernel[ki], ki + 1
 		end
 
-		csignal[i] = sum
+		csignal[offset + i] = sum
 	end
 
 	-- ...within signal...
+	local koff = kn + offset
+
 	for i = 0, sn - kn do
 		local sum, si = 0, i
 
@@ -61,10 +63,12 @@ function M.Convolve_1D (signal, kernel, opts)
 			sum = sum + signal[si] * kernel[j]
 		end
 
-		csignal[kn + i] = sum
+		csignal[koff + i] = sum
 	end
 
 	-- ...partially outside signal, to right.
+	local soff = sn + offset
+
 	for i = 1, kn - 1 do
 		local sum, si = 0, sn
 
@@ -72,7 +76,7 @@ function M.Convolve_1D (signal, kernel, opts)
 			sum, si = sum + signal[si] * kernel[ki], si - 1
 		end
 
-		csignal[sn + i] = sum
+		csignal[soff + i] = sum
 	end
 
 	return csignal	

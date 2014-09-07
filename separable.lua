@@ -41,11 +41,13 @@ local M = {}
 local Columns, ColVector, RowVector = {}, {}, {}
 
 -- --
-local Opts1, Opts2 = {}, { into = {} }
+local ColOpts, RowOpts = { into = Columns }, {}
 
 --
-local function AuxConvolve (out, signal, scols, sn, u, v, len)
+local function AuxConvolve (signal, scols, sn, u, v, len)
 	--
+	local coff = 0
+
 	for i = 1, scols do
 		local j = 1
 
@@ -53,24 +55,24 @@ local function AuxConvolve (out, signal, scols, sn, u, v, len)
 			ColVector[j], j = signal[ci], j + 1
 		end
 
-		Opts1.into = Columns[i]
+		ColOpts.offset, coff = coff, coff + len
 
-		Convolve_1D(ColVector, u, Opts1)
+		Convolve_1D(ColVector, u, ColOpts)
 	end
 
 	--
-	local index = 1
+	local roff = 0
 
 	for i = 1, len do
-		for j = 1, scols do
-			RowVector[j] = Columns[j][i]
+		local j = 1
+
+		for k = i, coff, len do
+			RowVector[j], j = Columns[k], j + 1
 		end
 
-		local row = Convolve_1D(RowVector, v, Opts2)
+		RowOpts.offset, roff = roff, roff + len
 
-		for k = 1, #row do
-			out[index], index = row[k], index + 1
-		end
+		Convolve_1D(RowVector, v, RowOpts)
 	end
 end
 
@@ -96,19 +98,18 @@ function M.Convolve_2D (signal, scols, decomp, opts)
 			RowVector[i] = nil
 		end
 
-		--
-		for i = #Columns + 1, scols do
-			Columns[i] = {}
-		end
-
 		-- Ideally, the matrix was separable, in which case one set of convolutions suffices. In
 		-- any case, at this point the output signal and accumulator are the same thing.
-		AuxConvolve(csignal, signal, scols, sn, u[1], v[1], len)
+		RowOpts.into = csignal
+
+		AuxConvolve(signal, scols, sn, u[1], v[1], len)
 
 		-- If the matrix was non-separable, refine the approximation with as many convolutions as
 		-- the user allows, or until rank is reached, when the refinement is almost exact.
+		RowOpts.into = ToAdd
+
 		for i = 2, min(max_rank, decomp.max_rank) do
-			AuxConvolve(ToAdd, signal, scols, sn, u[i], v[i], len)
+			AuxConvolve(signal, scols, sn, u[i], v[i], len)
 
 			for j = 1, n do
 				csignal[j] = csignal[j] + ToAdd[j]
