@@ -32,13 +32,47 @@ local linear_convolution = require("signal_ops.linear_convolution")
 local svd = require("linear_algebra_ops.svd")
 
 -- Imports --
-local Convolve_2D = linear_convolution.Convolve_2D
+local Convolve_1D = linear_convolution.Convolve_1D
 
 -- Exports --
 local M = {}
 
 -- --
-local Opts1, Opts2 = { into = {} }, {}
+local Columns, ColVector, RowVector = {}, {}, {}
+
+-- --
+local Opts1, Opts2 = {}, { into = {} }
+
+--
+local function AuxConvolve (out, signal, scols, sn, u, v, len)
+	--
+	for i = 1, scols do
+		local j = 1
+
+		for ci = i, sn, scols do
+			ColVector[j], j = signal[ci], j + 1
+		end
+
+		Opts1.into = Columns[i]
+
+		Convolve_1D(ColVector, u, Opts1)
+	end
+
+	--
+	local index = 1
+
+	for i = 1, len do
+		for j = 1, scols do
+			RowVector[j] = Columns[j][i]
+		end
+
+		local row = Convolve_1D(RowVector, v, Opts2)
+
+		for k = 1, #row do
+			out[index], index = row[k], index + 1
+		end
+	end
+end
 
 -- Intermediate convolution target, once accumulation kicks off --
 local ToAdd = {}
@@ -46,25 +80,35 @@ local ToAdd = {}
 --- DOCME
 function M.Convolve_2D (signal, scols, decomp, opts)
 	local csignal, sn, p = opts and opts.into or {}, opts and opts.sn or #signal, decomp.p
-	local max_rank, srows = opts and opts.max_rank or decomp.max_rank, sn / scols
-	local n = (scols + p - 1) * (srows + decomp.q - 1)
+	local max_rank, srows, len = opts and opts.max_rank or decomp.max_rank, sn / scols, scols + p - 1
+	local n = len * (srows + decomp.q - 1)
 
 	-- Typical case: matrix was successfully decomposed.
 	if max_rank > 0 then
 		local u, v = decomp.uarr, decomp.varr
 
+		-- Trim work vectors as necessary.
+		for i = #ColVector, srows + 1, -1 do
+			ColVector[i] = nil
+		end
+
+		for i = #RowVector, scols + 1, -1 do
+			RowVector[i] = nil
+		end
+
+		--
+		for i = #Columns + 1, scols do
+			Columns[i] = {}
+		end
+
 		-- Ideally, the matrix was separable, in which case one set of convolutions suffices. In
 		-- any case, at this point the output signal and accumulator are the same thing.
-		Opts2.into = csignal
-
-		Convolve_2D(Convolve_2D(signal, u[1], scols, 1, Opts1), v[1], scols, p, Opts2)
+		AuxConvolve(csignal, signal, scols, sn, u[1], v[1], len)
 
 		-- If the matrix was non-separable, refine the approximation with as many convolutions as
 		-- the user allows, or until rank is reached, when the refinement is almost exact.
-		Opts2.into = ToAdd
-
 		for i = 2, min(max_rank, decomp.max_rank) do
-			Convolve_2D(Convolve_2D(signal, u[i], scols, 1, Opts1), v[i], scols, p, Opts2)
+			AuxConvolve(ToAdd, signal, scols, sn, u[i], v[i], len)
 
 			for j = 1, n do
 				csignal[j] = csignal[j] + ToAdd[j]
@@ -124,23 +168,6 @@ function M.DecomposeKernel (kernel, kcols, opts)
 
 	return decomp
 end
-
---[=[
-local NN=25
-local S, K1 = {}, {}--{ 1, 2, 3, 4, 5, 6, 7, 8, 9 }, { 1, 2, 1 }
-local K2 = K1
-for i = 1, NN^2 do
-	S[i]=i
-end
-for i = 1, NN do
-	K1[i]=1
-end
-local opts1, opts2 = { into = {}, shape = "same" }, { into = {}, shape = "same" }
-for i = 1, 300 do
-	aa.Convolve_2D(S, K1, NN, 1, opts1)
-	aa.Convolve_2D(opts1.into, K2, NN, NN, opts2)
-end
-]=]
 
 -- Export the module.
 return M
