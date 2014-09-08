@@ -44,35 +44,23 @@ local Columns, ColVector, RowVector = {}, {}, {}
 local ColOpts, RowOpts = { into = Columns }, {}
 
 --
-local function AuxConvolve (signal, scols, sn, u, v, len)
-	--
-	local coff = 0
+local function AuxConvolve (from, count, size, u, v, len)
+	local offset, signal, kernel, opts = 0, ColVector, u, ColOpts
 
-	for i = 1, scols do
-		local j = 1
+	for _ = 1, 2 do
+		for i = 1, count do
+			local j = 1
 
-		for ci = i, sn, scols do
-			ColVector[j], j = signal[ci], j + 1
+			for ci = i, size, count do
+				signal[j], j = from[ci], j + 1
+			end
+
+			opts.offset, offset = offset, offset + len
+
+			Convolve_1D(signal, kernel, opts)
 		end
 
-		ColOpts.offset, coff = coff, coff + len
-
-		Convolve_1D(ColVector, u, ColOpts)
-	end
-
-	--
-	local roff = 0
-
-	for i = 1, len do
-		local j = 1
-
-		for k = i, coff, len do
-			RowVector[j], j = Columns[k], j + 1
-		end
-
-		RowOpts.offset, roff = roff, roff + len
-
-		Convolve_1D(RowVector, v, RowOpts)
+		count, from, size, offset, signal, opts, kernel = len, Columns, offset, 0, RowVector, RowOpts, v
 	end
 end
 
@@ -102,17 +90,17 @@ function M.Convolve_2D (signal, scols, decomp, opts)
 		-- any case, at this point the output signal and accumulator are the same thing.
 		RowOpts.into = csignal
 
-		AuxConvolve(signal, scols, sn, u[1], v[1], len)
+		for rank = 1, min(max_rank, decomp.max_rank) do
+			AuxConvolve(signal, scols, sn, u[rank], v[rank], len)
 
-		-- If the matrix was non-separable, refine the approximation with as many convolutions as
-		-- the user allows, or until rank is reached, when the refinement is almost exact.
-		RowOpts.into = ToAdd
-
-		for i = 2, min(max_rank, decomp.max_rank) do
-			AuxConvolve(signal, scols, sn, u[i], v[i], len)
-
-			for j = 1, n do
-				csignal[j] = csignal[j] + ToAdd[j]
+			-- If the matrix was non-separable, refine the approximation with as many convolutions as
+			-- the user allows, or until rank is reached, when the refinement is almost exact.
+			if rank > 1 then
+				for j = 1, n do
+					csignal[j] = csignal[j] + ToAdd[j]
+				end
+			else
+				RowOpts.into = ToAdd
 			end
 		end
 
