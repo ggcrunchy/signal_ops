@@ -41,6 +41,15 @@ local Convolve_1D = linear_convolution.Convolve_1D
 -- Exports --
 local M = {}
 
+--
+local function LoadColumn (from, to, col, size, count)
+	local index = 1
+
+	for ci = col, size, count do
+		to[index], index = from[ci], index + 1
+	end
+end
+
 -- --
 local Columns, ColVector, RowVector = {}, {}, {}
 
@@ -53,11 +62,7 @@ local function AuxConvolve (from, count, size, u, v, len)
 
 	for _ = 1, 2 do
 		for i = 1, count do
-			local j = 1
-
-			for ci = i, size, count do
-				signal[j], j = from[ci], j + 1
-			end
+			LoadColumn(from, signal, i, size, count)
 
 			opts.offset, offset = offset, offset + len
 
@@ -78,19 +83,20 @@ local B, C, D = {}, {}, {}
 local PrecomputedKernelFunc = utils.MakePrecomputedKernelFunc_1D(C)
 
 --
-local function AuxConvolve_FFT (max_rank, u, v, up, vp, size)
-
-	-- Then do just multiply / IFFT on left
-	local sss,ttt,uuu={},{},{}
-
-	local halfup, halfvp, ulen, count = .5 * up, .5 * vp, u.n, C.n
+local function AuxConvolve_FFT (csignal, max_rank, decomp, scols, srows)
+	local into, up, vp = csignal, decomp.up, decomp.vp
+	local halfup, ulen, uarr = .5 * up, decomp.ulen, decomp.uarr
+	local halfvp, vlen, varr = .5 * vp, decomp.vlen, decomp.varr
+	local n, up2 = ulen * vlen, 2 * up
+	local up_to = scols * up2 - 1
 
 	for rank = 1, max_rank do
-		local index = 1
+		--
+		local size, u = 0, uarr[rank]
 
-		for i = 1, size, count do
-			for j = 0, count - 1 do
-				C[j + 1] = Columns[i + j]
+		for offset = 0, up_to, up2 do
+			for j = 1, up2 do
+				C[j] = Columns[offset + j]
 			end
 
 			fft_utils.Multiply_1D(C, u, up, B)
@@ -99,27 +105,32 @@ local function AuxConvolve_FFT (max_rank, u, v, up, vp, size)
 			real_fft.RealIFFT_1D(B, halfup)
 
 			-- ...and get the requested part of the result.
-			for i = 1, ulen do
-				D[index], index = B[i], index + 1
+			for j = 1, ulen do
+				D[size + 1], size = B[j], size + 1
 			end
 		end
---- ^^^ Some of those indices are surely off!
-		for i = 1, 20 do -- err, whatever this is :)
-			PrecomputedKernelFunc(vp, B, ulen, v)
+
+		--
+		local index, v = 1, varr[rank]
+
+		for i = 1, ulen do
+			LoadColumn(D, B, i, size, ulen)
+			PrecomputedKernelFunc(vp, B, srows, v)
 
 			real_fft.RealIFFT_1D(C, halfvp)
---[[
-Convolve_1D(signal, kernel, opts)
+
+			for j = 1, vlen do
+				into[index], index = C[j], index + 1
+			end
 		end
 
-		count, from, size, offset, signal, opts, kernel = len, Columns, offset, 0, RowVector, RowOpts, v
-]]
-		end
-
+		--
 		if rank > 1 then
-			-- switch target to ToAdd...
+			for j = 1, n do
+				csignal[j] = csignal[j] + ToAdd[j]
+			end
 		else
-			-- accumulate ToAdd...
+			into = ToAdd
 		end
 	end
 end
@@ -132,26 +143,25 @@ function M.Convolve_2D (signal, scols, decomp, opts)
 
 	-- Typical case: matrix was successfully decomposed.
 	if max_rank > 0 then
-		local u, v = decomp.uarr, decomp.varr
 
 		--
 		if decomp.up then
-			local size = 0
+			local index, up2 = 1, 2 * decomp.up
 
-			for i = 1, #signal, scols do
-				for j = 0, scols - 1 do
-					B[j + 1] = signal[i + j]
-				end
+			for i = 1, scols do
+				LoadColumn(signal, B, i, sn, scols)
 
-				utils.PrecomputeKernel_1D(C, decomp.up, B, scols)
+				utils.PrecomputeKernel_1D(C, decomp.up, B, srows)
 
-				for j = 1, C.n do
-					Columns[size + 1], size = C[j], size + 1
+				for i = 1, up2 do
+					Columns[index], index = C[i], index + 1
 				end
 			end
 
-			AuxConvolve_FFT(max_rank, u, v, decomp.up, decomp.vp, size)
+			AuxConvolve_FFT(csignal, max_rank, decomp, scols, srows)
 		else
+			local u, v = decomp.uarr, decomp.varr
+
 			-- Trim work vectors as necessary.
 			for i = #ColVector, srows + 1, -1 do
 				ColVector[i] = nil
@@ -206,7 +216,7 @@ local TempU, TempV
 
 --- DOCME
 function M.DecomposeKernel (kernel, kcols, opts)
-	local kn, scols, srows, ulen, up, vlen, vp = opts and opts.kn or #kernel, opts and opts.scols, opts and opts.srows
+	local kn, scols, srows, up, vp = opts and opts.kn or #kernel, opts and opts.scols, opts and opts.srows
 
 	assert(not scols == not srows, "Missing signal columns or row count")
 
@@ -215,8 +225,8 @@ function M.DecomposeKernel (kernel, kcols, opts)
 
 	--
 	if scols then
-		TempU, ulen, up = TempU or {}, utils.LenPower(scols, kcols)
-		TempV, vlen, vp = TempV or {}, utils.LenPower(srows, kn / kcols)
+		TempU, decomp.ulen, up = TempU or {}, utils.LenPower(scols, kcols)
+		TempV, decomp.vlen, vp = TempV or {}, utils.LenPower(srows, kn / kcols)
 
 		decomp.up, decomp.vp = up, vp
 	end
@@ -248,8 +258,8 @@ function M.DecomposeKernel (kernel, kcols, opts)
 			if scols then
 				TempU, TempV, uv, vv = uv, vv, TempU, TempV
 
-				utils.PrecomputeKernel_1D(uv, up, TempU, ulen)
-				utils.PrecomputeKernel_1D(vv, vp, TempV, vlen)
+				utils.PrecomputeKernel_1D(uv, up, TempU, kcols)
+				utils.PrecomputeKernel_1D(vv, vp, TempV, kcols)
 			end
 
 			uarr[i], varr[i] = uv, vv
