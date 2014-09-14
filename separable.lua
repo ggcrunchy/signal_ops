@@ -24,16 +24,12 @@
 --
 
 -- Standard library imports --
-local assert = assert
 local max = math.max
 local min = math.min
 
 -- Modules --
-local fft_utils = require("dft_ops.utils")
 local linear_convolution = require("signal_ops.linear_convolution")
-local real_fft = require("dft_ops.real_fft")
 local svd = require("linear_algebra_ops.svd")
-local utils = require("signal_ops.utils")
 
 -- Imports --
 local Convolve_1D = linear_convolution.Convolve_1D
@@ -76,65 +72,6 @@ end
 -- Intermediate convolution target, once accumulation kicks off --
 local ToAdd = {}
 
--- --
-local B, C, D = {}, {}, {}
-
--- --
-local PrecomputedKernelFunc = utils.MakePrecomputedKernelFunc_1D(C)
-
---
-local function AuxConvolve_FFT (csignal, max_rank, decomp, scols, srows)
-	local into, up, vp = csignal, decomp.up, decomp.vp
-	local halfup, ulen, uarr = .5 * up, decomp.ulen, decomp.uarr
-	local halfvp, vlen, varr = .5 * vp, decomp.vlen, decomp.varr
-	local n, up2 = ulen * vlen, 2 * up
-	local up_to = scols * up2 - 1
-
-	for rank = 1, max_rank do
-		--
-		local size, u = 0, uarr[rank]
-
-		for offset = 0, up_to, up2 do
-			for j = 1, up2 do
-				C[j] = Columns[offset + j]
-			end
-
-			fft_utils.Multiply_1D(C, u, up, B)
-
-			-- ...transform back to the time domain...
-			real_fft.RealIFFT_1D(B, halfup)
-
-			-- ...and get the requested part of the result.
-			for j = 1, ulen do
-				D[size + 1], size = B[j], size + 1
-			end
-		end
-
-		--
-		local index, v = 1, varr[rank]
-
-		for i = 1, ulen do
-			LoadColumn(D, B, i, size, ulen)
-			PrecomputedKernelFunc(vp, B, srows, v)
-
-			real_fft.RealIFFT_1D(C, halfvp)
-
-			for j = 1, vlen do
-				into[index], index = C[j], index + 1
-			end
-		end
-
-		--
-		if rank > 1 then
-			for j = 1, n do
-				csignal[j] = csignal[j] + ToAdd[j]
-			end
-		else
-			into = ToAdd
-		end
-	end
-end
-
 --- DOCME
 function M.Convolve_2D (signal, scols, decomp, opts)
 	local csignal, sn, p = opts and opts.into or {}, opts and opts.sn or #signal, decomp.p
@@ -143,50 +80,32 @@ function M.Convolve_2D (signal, scols, decomp, opts)
 
 	-- Typical case: matrix was successfully decomposed.
 	if max_rank > 0 then
+		local u, v = decomp.uarr, decomp.varr
 
-		--
-		if decomp.up then
-			local index, up2 = 1, 2 * decomp.up
+		-- Trim work vectors as necessary.
+		for i = #ColVector, srows + 1, -1 do
+			ColVector[i] = nil
+		end
 
-			for i = 1, scols do
-				LoadColumn(signal, B, i, sn, scols)
+		for i = #RowVector, scols + 1, -1 do
+			RowVector[i] = nil
+		end
 
-				utils.PrecomputeKernel_1D(C, decomp.up, B, srows)
+		-- Ideally, the matrix was separable, in which case one set of convolutions suffices. In
+		-- any case, at this point the output signal and accumulator are the same thing.
+		RowOpts.into = csignal
 
-				for i = 1, up2 do
-					Columns[index], index = C[i], index + 1
+		for rank = 1, min(max_rank, decomp.max_rank) do
+			AuxConvolve(signal, scols, sn, u[rank], v[rank], len)
+
+			-- If the matrix was non-separable, refine the approximation with as many convolutions as
+			-- the user allows, or until rank is reached, when the refinement is almost exact.
+			if rank > 1 then
+				for j = 1, n do
+					csignal[j] = csignal[j] + ToAdd[j]
 				end
-			end
-
-			AuxConvolve_FFT(csignal, max_rank, decomp, scols, srows)
-		else
-			local u, v = decomp.uarr, decomp.varr
-
-			-- Trim work vectors as necessary.
-			for i = #ColVector, srows + 1, -1 do
-				ColVector[i] = nil
-			end
-
-			for i = #RowVector, scols + 1, -1 do
-				RowVector[i] = nil
-			end
-
-			-- Ideally, the matrix was separable, in which case one set of convolutions suffices. In
-			-- any case, at this point the output signal and accumulator are the same thing.
-			RowOpts.into = csignal
-
-			for rank = 1, min(max_rank, decomp.max_rank) do
-				AuxConvolve(signal, scols, sn, u[rank], v[rank], len)
-
-				-- If the matrix was non-separable, refine the approximation with as many convolutions as
-				-- the user allows, or until rank is reached, when the refinement is almost exact.
-				if rank > 1 then
-					for j = 1, n do
-						csignal[j] = csignal[j] + ToAdd[j]
-					end
-				else
-					RowOpts.into = ToAdd
-				end
+			else
+				RowOpts.into = ToAdd
 			end
 		end
 
@@ -211,25 +130,11 @@ local function FindRank (s, n)
 	return n
 end
 
--- --
-local TempU, TempV
 
 --- DOCME
 function M.DecomposeKernel (kernel, kcols, opts)
-	local kn, scols, srows, up, vp = opts and opts.kn or #kernel, opts and opts.scols, opts and opts.srows
-
-	assert(not scols == not srows, "Missing signal columns or row count")
-
-	local decomp = opts and opts.into or {}
+	local kn, decomp = opts and opts.kn or #kernel, opts and opts.into or {}
 	local uarr, varr = decomp.uarr or {}, decomp.varr or {}
-
-	--
-	if scols then
-		TempU, decomp.ulen, up = TempU or {}, utils.LenPower(scols, kcols)
-		TempV, decomp.vlen, vp = TempV or {}, utils.LenPower(srows, kn / kcols)
-
-		decomp.up, decomp.vp = up, vp
-	end
 
 	--
 	if kcols^2 == kn then
@@ -239,27 +144,12 @@ function M.DecomposeKernel (kernel, kcols, opts)
 			local uv, vv, j = uarr[i] or {}, varr[i] or {}, 1
 
 			--
-			if scols then
-				TempU, TempV, uv, vv = uv, vv, TempU, TempV
-			else
-				uv.n, vv.n = nil
-			end
-
-			--
 			for ci = i, kn, kcols do
 				uv[j], vv[j], j = u[ci], v[ci], j + 1
 			end
 
 			for k = max(#uv, #vv), j, -1 do
 				uv[k], vv[k] = nil
-			end
-
-			--
-			if scols then
-				TempU, TempV, uv, vv = uv, vv, TempU, TempV
-
-				utils.PrecomputeKernel_1D(uv, up, TempU, kcols)
-				utils.PrecomputeKernel_1D(vv, vp, TempV, kcols)
 			end
 
 			uarr[i], varr[i] = uv, vv
