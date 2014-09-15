@@ -32,6 +32,9 @@ local Ring = {}
 --- One-dimensional circular convolution.
 -- @array signal Real discrete signal...
 -- @array kernel ...and kernel.
+-- @ptable[opt] opts Convolve options. Fields:
+--
+-- * **into**: If provided, this table will receive the convolution.
 -- @treturn array Convolution, of size #_signal_.
 function M.Convolve_1D (signal, kernel, opts)
 	local sn, kn, csignal = #signal, #kernel, opts and opts.into or {}
@@ -72,6 +75,9 @@ end
 -- @array kernel ...and kernel.
 -- @uint scols Number of columns in _signal_... 
 -- @uint kcols ... and in _kernel_.
+-- @ptable[opt] opts Convolve options. Fields:
+--
+-- * **into**: If provided, this table will receive the convolution.
 -- @treturn array Convolution, with dimensions and layout as per _signal_.
 function M.Convolve_2D (signal, kernel, scols, kcols, opts)
 	-- If the kernel is wider than the signal, swap roles (commutability of convolution).

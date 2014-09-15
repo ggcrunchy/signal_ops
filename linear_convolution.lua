@@ -32,6 +32,10 @@ local M = {}
 --- One-dimensional linear convolution.
 -- @array signal Real discrete signal...
 -- @array kernel ...and kernel.
+-- @ptable[opt] opts Convolve options. Fields:
+--
+-- * **into**: If provided, this table will receive the convolution.
+-- * **offset**: Offset added to positions (by default, 0) into which values are loaded.
 -- @treturn array Convolution, of size #_signal_ + #_kernel_ - 1.
 function M.Convolve_1D (signal, kernel, opts)
 	local sn, kn, csignal, offset = #signal, #kernel, opts and opts.into or {}, opts and opts.offset or 0
@@ -221,8 +225,11 @@ local DefConvolve2D = AuxConvolve2D.full
 -- @array kernel ...and kernel.
 -- @uint scols Number of columns in _signal_... 
 -- @uint kcols ... and in _kernel_.
--- @string[opt="full"] shape One of **"compact"**, **"full"**, or **"same"**, which describes
--- how much of the convolution is returned (emanating from the center).
+-- @ptable[opt] opts Convolve options. Fields:
+--
+-- * **into**: If provided, this table will receive the convolution.
+-- * **shape**: One of **"compact"**, **"full"** (the default), or **"same"**, describing how
+-- much of the convolution is returned (emanating from the center).
 -- @treturn array Convolution.
 -- @treturn uint Number of columns in the convolution, given _shape_:
 --
